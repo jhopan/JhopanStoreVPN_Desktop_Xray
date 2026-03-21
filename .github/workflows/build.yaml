@@ -71,10 +71,24 @@ jobs:
             echo "APP_VERSION=0.0.${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
           fi
 
+      - name: Install Linux build dependencies (Fyne/X11/OpenGL)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgl1-mesa-dev \
+            libx11-dev \
+            libxrandr-dev \
+            libxinerama-dev \
+            libxcursor-dev \
+            libxi-dev \
+            libxxf86vm-dev \
+            pkg-config \
+            xorg-dev
+
       - name: Build Linux binary
         run: |
           mkdir -p ./dist/linux
-          GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ./dist/linux/JhopanStoreVPN .
+          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ./dist/linux/JhopanStoreVPN .
 
       - name: Build Linux package (.deb)
         run: |
@@ -108,10 +122,10 @@ jobs:
             echo "APP_VERSION=0.0.${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
           fi
 
-      - name: Build macOS binary
+      - name: Build macOS binary (native runner arch)
         run: |
           mkdir -p ./dist/macos
-          GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ./dist/macos/JhopanStoreVPN .
+          CGO_ENABLED=1 go build -trimpath -ldflags "-s -w" -o ./dist/macos/JhopanStoreVPN .
 
       - name: Build macOS package (DMG)
         run: |
