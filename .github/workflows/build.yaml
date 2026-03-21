@@ -1,0 +1,127 @@
+name: Desktop Multi OS Build
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.21.x"
+
+      - name: Build Windows binary (flagged)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path .\dist\windows | Out-Null
+          $env:GOOS = "windows"
+          $env:GOARCH = "amd64"
+          go build -trimpath -ldflags "-s -w -H=windowsgui" -o .\dist\windows\JhopanStoreVPN.exe .
+
+      - name: Verify required Windows runtime files
+        shell: pwsh
+        run: |
+          if (!(Test-Path .\dist\windows\xray.exe)) { throw "Missing dist/windows/xray.exe" }
+          if (!(Test-Path .\dist\windows\wintun.dll)) { throw "Missing dist/windows/wintun.dll" }
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build Windows installer (Inno Setup)
+        shell: pwsh
+        run: ./packaging/windows/make-installer.ps1
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: JhopanStoreVPN-windows
+          path: |
+            dist/windows/JhopanStoreVPN.exe
+            dist/installer/windows/JhopanStoreVPN-Setup.exe
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.21.x"
+
+      - name: Set build version
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            echo "APP_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          else
+            echo "APP_VERSION=0.0.${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build Linux binary
+        run: |
+          mkdir -p ./dist/linux
+          GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ./dist/linux/JhopanStoreVPN .
+
+      - name: Build Linux package (.deb)
+        run: |
+          chmod +x ./packaging/linux/build-deb.sh
+          ./packaging/linux/build-deb.sh "$APP_VERSION" amd64
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: JhopanStoreVPN-linux
+          path: |
+            dist/linux/JhopanStoreVPN
+            dist/installer/linux/*.deb
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.21.x"
+
+      - name: Set build version
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            echo "APP_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          else
+            echo "APP_VERSION=0.0.${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build macOS binary
+        run: |
+          mkdir -p ./dist/macos
+          GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ./dist/macos/JhopanStoreVPN .
+
+      - name: Build macOS package (DMG)
+        run: |
+          chmod +x ./packaging/macos/build-dmg.sh
+          ./packaging/macos/build-dmg.sh "$APP_VERSION"
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: JhopanStoreVPN-macos
+          path: |
+            dist/macos/JhopanStoreVPN
+            dist/installer/macos/*.dmg

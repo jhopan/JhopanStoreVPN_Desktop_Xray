@@ -1,0 +1,15 @@
+{
+"inbounds": [
+{
+"tag": "tun-in",
+"port": 10809,
+"protocol": "tun",
+"settings": {
+"autoRoute": true,
+"strictRoute": true,
+"name": "JhopanVPN"
+}
+}
+],
+"outbounds": [{"protocol": "freedom"}]
+}
