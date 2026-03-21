@@ -107,7 +107,8 @@ jobs:
             libxi-dev \
             libxxf86vm-dev \
             pkg-config \
-            xorg-dev
+            xorg-dev \
+            unzip
 
       - name: Remove Windows-only resource object
         run: rm -f ./resource.syso
@@ -121,7 +122,7 @@ jobs:
         run: |
           # Get latest Xray-core release
           release=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest)
-          download_url=$(echo "$release" | grep -o '"browser_download_url": "[^"]*linux-64[^"]*"' | head -1 | cut -d'"' -f4)
+          download_url=$(echo "$release" | grep -Eo '"browser_download_url": "[^"]*linux-64(\.zip|\.tar\.gz)"' | head -1 | cut -d'"' -f4)
           if [ -z "$download_url" ]; then
             echo "Could not find Xray Linux binary in latest release"
             exit 1
@@ -130,9 +131,21 @@ jobs:
           
           # Download and extract
           cd dist/linux
-          curl -L "$download_url" -o xray.tar.gz
-          tar -xzf xray.tar.gz
-          rm xray.tar.gz
+          archive_name="${download_url##*/}"
+          curl -L "$download_url" -o "$archive_name"
+          case "$archive_name" in
+            *.zip)
+              unzip -o "$archive_name"
+              ;;
+            *.tar.gz|*.tgz)
+              tar -xzf "$archive_name"
+              ;;
+            *)
+              echo "Unsupported archive format: $archive_name"
+              exit 1
+              ;;
+          esac
+          rm "$archive_name"
           chmod +x xray
           if [ -f xray ]; then
             echo "✓ Xray downloaded successfully"
@@ -186,7 +199,10 @@ jobs:
         run: |
           # Get latest Xray-core release
           release=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest)
-          download_url=$(echo "$release" | grep -o '"browser_download_url": "[^"]*macos-64[^"]*"' | head -1 | cut -d'"' -f4)
+          download_url=$(echo "$release" | grep -Eo '"browser_download_url": "[^"]*macos-arm64-v8a\.zip"' | head -1 | cut -d'"' -f4)
+          if [ -z "$download_url" ]; then
+            download_url=$(echo "$release" | grep -Eo '"browser_download_url": "[^"]*macos-64\.zip"' | head -1 | cut -d'"' -f4)
+          fi
           if [ -z "$download_url" ]; then
             echo "Could not find Xray macOS binary in latest release"
             exit 1
@@ -237,13 +253,13 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release-artifacts/JhopanStoreVPN-windows/JhopanStoreVPN-Setup.exe
-            release-artifacts/JhopanStoreVPN-windows/JhopanStoreVPN.exe
-            release-artifacts/JhopanStoreVPN-windows/xray.exe
-            release-artifacts/JhopanStoreVPN-windows/wintun.dll
-            release-artifacts/JhopanStoreVPN-linux/jhopanstorevpn_*.deb
-            release-artifacts/JhopanStoreVPN-linux/JhopanStoreVPN
-            release-artifacts/JhopanStoreVPN-linux/xray
-            release-artifacts/JhopanStoreVPN-macos/JhopanStoreVPN-*.dmg
-            release-artifacts/JhopanStoreVPN-macos/JhopanStoreVPN
-            release-artifacts/JhopanStoreVPN-macos/xray
+            release-artifacts/JhopanStoreVPN-windows/windows/JhopanStoreVPN.exe
+            release-artifacts/JhopanStoreVPN-windows/windows/xray.exe
+            release-artifacts/JhopanStoreVPN-windows/windows/wintun.dll
+            release-artifacts/JhopanStoreVPN-windows/installer/windows/JhopanStoreVPN-Setup.exe
+            release-artifacts/JhopanStoreVPN-linux/linux/JhopanStoreVPN
+            release-artifacts/JhopanStoreVPN-linux/linux/xray
+            release-artifacts/JhopanStoreVPN-linux/installer/linux/jhopanstorevpn_*.deb
+            release-artifacts/JhopanStoreVPN-macos/macos/JhopanStoreVPN
+            release-artifacts/JhopanStoreVPN-macos/macos/xray
+            release-artifacts/JhopanStoreVPN-macos/installer/macos/JhopanStoreVPN-*.dmg
