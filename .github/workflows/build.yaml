@@ -30,13 +30,33 @@ jobs:
           $env:GOARCH = "amd64"
           go build -trimpath -ldflags "-s -w -H=windowsgui" -o .\dist\windows\JhopanStoreVPN.exe .
 
+      - name: Download Xray for Windows
+        shell: pwsh
+        run: |
+          # Get latest Xray-core release
+          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/XTLS/Xray-core/releases/latest" -Headers @{"Accept"="application/vnd.github.v3+json"}
+          $asset = $release.assets | Where-Object { $_.name -like "*windows*64*" -and $_.name -like "*.zip" } | Select-Object -First 1
+          if (-not $asset) { throw "Could not find Xray Windows binary in latest release" }
+          $download_url = $asset.browser_download_url
+          Write-Host "Downloading Xray from: $download_url"
+          
+          # Download and extract
+          $zip_path = ".\xray.zip"
+          Invoke-WebRequest -Uri $download_url -OutFile $zip_path
+          Expand-Archive -Path $zip_path -DestinationPath .\dist\windows\ -Force
+          Remove-Item $zip_path
+          
+          # Rename xray.exe to match if needed
+          if (Test-Path .\dist\windows\xray.exe) { Write-Host "✓ Xray.exe downloaded successfully" }
+          else { throw "xray.exe not found after extraction" }
+
       - name: Copy Windows runtime files (wintun.dll)
         shell: pwsh
         run: |
           if (Test-Path .\wintun.dll) { Copy-Item .\wintun.dll .\dist\windows\ -Force }
           if (Test-Path .\dist\windows\JhopanStoreVPN.exe) { Write-Host "✓ JhopanStoreVPN.exe built successfully" }
           else { throw "Missing dist/windows/JhopanStoreVPN.exe" }
-          if (!(Test-Path .\dist\windows\wintun.dll)) { Write-Host "⚠ wintun.dll not found in dist/windows" }
+          Write-Host "✓ Windows dist ready for packaging"
 
       - name: Install Inno Setup
         shell: pwsh
@@ -52,6 +72,8 @@ jobs:
           name: JhopanStoreVPN-windows
           path: |
             dist/windows/JhopanStoreVPN.exe
+            dist/windows/xray.exe
+            dist/windows/wintun.dll
             dist/installer/windows/JhopanStoreVPN-Setup.exe
 
   build-linux:
@@ -95,6 +117,30 @@ jobs:
           mkdir -p ./dist/linux
           CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ./dist/linux/JhopanStoreVPN .
 
+      - name: Download Xray for Linux
+        run: |
+          # Get latest Xray-core release
+          release=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest)
+          download_url=$(echo "$release" | grep -o '"browser_download_url": "[^"]*linux-64[^"]*"' | head -1 | cut -d'"' -f4)
+          if [ -z "$download_url" ]; then
+            echo "Could not find Xray Linux binary in latest release"
+            exit 1
+          fi
+          echo "Downloading Xray from: $download_url"
+          
+          # Download and extract
+          cd dist/linux
+          curl -L "$download_url" -o xray.tar.gz
+          tar -xzf xray.tar.gz
+          rm xray.tar.gz
+          chmod +x xray
+          if [ -f xray ]; then
+            echo "✓ Xray downloaded successfully"
+          else
+            echo "xray not found after extraction"
+            exit 1
+          fi
+
       - name: Build Linux package (.deb)
         run: |
           chmod +x ./packaging/linux/build-deb.sh
@@ -106,6 +152,7 @@ jobs:
           name: JhopanStoreVPN-linux
           path: |
             dist/linux/JhopanStoreVPN
+            dist/linux/xray
             dist/installer/linux/*.deb
 
   build-macos:
@@ -135,6 +182,30 @@ jobs:
           mkdir -p ./dist/macos
           CGO_ENABLED=1 go build -trimpath -ldflags "-s -w" -o ./dist/macos/JhopanStoreVPN .
 
+      - name: Download Xray for macOS
+        run: |
+          # Get latest Xray-core release
+          release=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest)
+          download_url=$(echo "$release" | grep -o '"browser_download_url": "[^"]*macos-64[^"]*"' | head -1 | cut -d'"' -f4)
+          if [ -z "$download_url" ]; then
+            echo "Could not find Xray macOS binary in latest release"
+            exit 1
+          fi
+          echo "Downloading Xray from: $download_url"
+          
+          # Download and extract
+          cd dist/macos
+          curl -L "$download_url" -o xray.zip
+          unzip -o xray.zip
+          rm xray.zip
+          chmod +x xray
+          if [ -f xray ]; then
+            echo "✓ Xray downloaded successfully"
+          else
+            echo "xray not found after extraction"
+            exit 1
+          fi
+
       - name: Build macOS package (DMG)
         run: |
           chmod +x ./packaging/macos/build-dmg.sh
@@ -146,6 +217,7 @@ jobs:
           name: JhopanStoreVPN-macos
           path: |
             dist/macos/JhopanStoreVPN
+            dist/macos/xray
             dist/installer/macos/*.dmg
 
   release:
@@ -167,7 +239,11 @@ jobs:
           files: |
             release-artifacts/JhopanStoreVPN-windows/JhopanStoreVPN-Setup.exe
             release-artifacts/JhopanStoreVPN-windows/JhopanStoreVPN.exe
+            release-artifacts/JhopanStoreVPN-windows/xray.exe
+            release-artifacts/JhopanStoreVPN-windows/wintun.dll
             release-artifacts/JhopanStoreVPN-linux/jhopanstorevpn_*.deb
             release-artifacts/JhopanStoreVPN-linux/JhopanStoreVPN
+            release-artifacts/JhopanStoreVPN-linux/xray
             release-artifacts/JhopanStoreVPN-macos/JhopanStoreVPN-*.dmg
             release-artifacts/JhopanStoreVPN-macos/JhopanStoreVPN
+            release-artifacts/JhopanStoreVPN-macos/xray
