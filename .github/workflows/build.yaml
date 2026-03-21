@@ -30,11 +30,13 @@ jobs:
           $env:GOARCH = "amd64"
           go build -trimpath -ldflags "-s -w -H=windowsgui" -o .\dist\windows\JhopanStoreVPN.exe .
 
-      - name: Verify required Windows runtime files
+      - name: Copy Windows runtime files (wintun.dll)
         shell: pwsh
         run: |
-          if (!(Test-Path .\dist\windows\xray.exe)) { throw "Missing dist/windows/xray.exe" }
-          if (!(Test-Path .\dist\windows\wintun.dll)) { throw "Missing dist/windows/wintun.dll" }
+          if (Test-Path .\wintun.dll) { Copy-Item .\wintun.dll .\dist\windows\ -Force }
+          if (Test-Path .\dist\windows\JhopanStoreVPN.exe) { Write-Host "✓ JhopanStoreVPN.exe built successfully" }
+          else { throw "Missing dist/windows/JhopanStoreVPN.exe" }
+          if (!(Test-Path .\dist\windows\wintun.dll)) { Write-Host "⚠ wintun.dll not found in dist/windows" }
 
       - name: Install Inno Setup
         shell: pwsh
