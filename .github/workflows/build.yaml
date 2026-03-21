@@ -85,6 +85,9 @@ jobs:
             pkg-config \
             xorg-dev
 
+      - name: Remove Windows-only resource object
+        run: rm -f ./resource.syso
+
       - name: Build Linux binary
         run: |
           mkdir -p ./dist/linux
@@ -121,6 +124,9 @@ jobs:
           else
             echo "APP_VERSION=0.0.${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
           fi
+
+      - name: Remove Windows-only resource object
+        run: rm -f ./resource.syso
 
       - name: Build macOS binary (native runner arch)
         run: |
