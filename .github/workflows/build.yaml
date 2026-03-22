@@ -112,7 +112,8 @@ jobs:
             libxxf86vm-dev \
             pkg-config \
             xorg-dev \
-            unzip
+            unzip \
+            rpm
 
       - name: Remove Windows-only resource object
         run: rm -f ./resource.syso
@@ -168,6 +169,11 @@ jobs:
           chmod +x ./packaging/linux/build-deb.sh
           ./packaging/linux/build-deb.sh "$APP_VERSION" amd64
 
+      - name: Build Linux package (.rpm)
+        run: |
+          chmod +x ./packaging/linux/build-rpm.sh
+          ./packaging/linux/build-rpm.sh "$APP_VERSION" amd64
+
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -176,9 +182,20 @@ jobs:
             dist/linux/JhopanStoreVPN
             dist/linux/xray
             dist/installer/linux/*.deb
+            dist/installer/linux/*.rpm
 
   build-macos:
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-13
+            arch: amd64
+            xray_arch_token: macos-64
+          - runner: macos-14
+            arch: arm64
+            xray_arch_token: macos-arm64
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -202,19 +219,22 @@ jobs:
       - name: Build macOS binary (native runner arch)
         run: |
           mkdir -p ./dist/macos
-          CGO_ENABLED=1 go build -trimpath -ldflags "-s -w" -o ./dist/macos/JhopanStoreVPN .
+          CGO_ENABLED=1 GOOS=darwin GOARCH=${{ matrix.arch }} go build -trimpath -ldflags "-s -w" -o ./dist/macos/JhopanStoreVPN .
 
       - name: Download Xray for macOS
         run: |
           # Get latest Xray-core release URL in a format-agnostic way
+          TARGET_TOKEN="${{ matrix.xray_arch_token }}"
           download_url=$(python3 - <<'PY'
           import json
+          import os
           import urllib.request
 
           api = "https://api.github.com/repos/XTLS/Xray-core/releases/latest"
           with urllib.request.urlopen(api) as r:
             data = json.load(r)
 
+          target = os.environ.get("TARGET_TOKEN", "macos-arm64")
           urls = [a.get("browser_download_url", "") for a in data.get("assets", [])]
           urls = [u for u in urls if "macos" in u and not u.endswith(".dgst")]
 
@@ -224,7 +244,11 @@ jobs:
                 return u
             return ""
 
-          chosen = pick(urls, "macos-arm64") or pick(urls, "macos-64")
+          chosen = pick(urls, target)
+          if not chosen and target != "macos-arm64":
+            chosen = pick(urls, "macos-arm64")
+          if not chosen and target != "macos-64":
+            chosen = pick(urls, "macos-64")
           if not chosen and urls:
             chosen = urls[0]
 
@@ -270,12 +294,12 @@ jobs:
       - name: Build macOS package (DMG)
         run: |
           chmod +x ./packaging/macos/build-dmg.sh
-          ./packaging/macos/build-dmg.sh "$APP_VERSION"
+          ./packaging/macos/build-dmg.sh "$APP_VERSION" "${{ matrix.arch }}"
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: JhopanStoreVPN-macos
+          name: JhopanStoreVPN-macos-${{ matrix.arch }}
           path: |
             dist/macos/JhopanStoreVPN
             dist/macos/xray
@@ -300,4 +324,6 @@ jobs:
           files: |
             release-artifacts/JhopanStoreVPN-windows/installer/windows/JhopanStoreVPN-Setup.exe
             release-artifacts/JhopanStoreVPN-linux/installer/linux/jhopanstorevpn_*.deb
-            release-artifacts/JhopanStoreVPN-macos/installer/macos/JhopanStoreVPN-*.dmg
+            release-artifacts/JhopanStoreVPN-linux/installer/linux/jhopanstorevpn_*.rpm
+            release-artifacts/JhopanStoreVPN-macos-amd64/installer/macos/JhopanStoreVPN-*-amd64.dmg
+            release-artifacts/JhopanStoreVPN-macos-arm64/installer/macos/JhopanStoreVPN-*-arm64.dmg

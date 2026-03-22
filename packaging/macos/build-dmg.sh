@@ -4,6 +4,7 @@ set -euo pipefail
 APP_NAME="JhopanStoreVPN"
 APP_ID="com.jhopanstore.vpn"
 VERSION="${1:-1.0.0}"
+ARCH_SUFFIX="${2:-}"
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist/macos"
@@ -83,7 +84,11 @@ EOF
 ln -s /Applications "$STAGE_DIR/Applications"
 
 mkdir -p "$OUT_DIR"
-DMG_PATH="$OUT_DIR/${APP_NAME}-${VERSION}.dmg"
+if [[ -n "$ARCH_SUFFIX" ]]; then
+  DMG_PATH="$OUT_DIR/${APP_NAME}-${VERSION}-${ARCH_SUFFIX}.dmg"
+else
+  DMG_PATH="$OUT_DIR/${APP_NAME}-${VERSION}.dmg"
+fi
 
 hdiutil create -volname "$APP_NAME" -srcfolder "$STAGE_DIR" -ov -format UDZO "$DMG_PATH"
 
