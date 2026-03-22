@@ -33,19 +33,16 @@ jobs:
       - name: Download Xray for Windows
         shell: pwsh
         run: |
-          # Get latest Xray-core release
-          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/XTLS/Xray-core/releases/latest" -Headers @{"Accept"="application/vnd.github.v3+json"}
-          $asset = $release.assets | Where-Object { $_.name -like "*windows*64*" -and $_.name -like "*.zip" } | Select-Object -First 1
-          if (-not $asset) { throw "Could not find Xray Windows binary in latest release" }
-          $download_url = $asset.browser_download_url
+          # Avoid GitHub API rate limits by using latest/download redirect URL
+          $download_url = "https://github.com/XTLS/Xray-core/releases/latest/download/Xray-windows-64.zip"
           Write-Host "Downloading Xray from: $download_url"
-          
+
           # Download and extract
           $zip_path = ".\xray.zip"
           Invoke-WebRequest -Uri $download_url -OutFile $zip_path
           Expand-Archive -Path $zip_path -DestinationPath .\dist\windows\ -Force
           Remove-Item $zip_path
-          
+
           # Rename xray.exe to match if needed
           if (Test-Path .\dist\windows\xray.exe) { Write-Host "✓ Xray.exe downloaded successfully" }
           else { throw "xray.exe not found after extraction" }
@@ -125,15 +122,10 @@ jobs:
 
       - name: Download Xray for Linux
         run: |
-          # Get latest Xray-core release
-          release=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest)
-          download_url=$(echo "$release" | grep -Eo '"browser_download_url": "[^"]*linux-64(\.zip|\.tar\.gz)"' | head -1 | cut -d'"' -f4)
-          if [ -z "$download_url" ]; then
-            echo "Could not find Xray Linux binary in latest release"
-            exit 1
-          fi
+          # Avoid GitHub API rate limits by using latest/download redirect URL
+          download_url="https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-64.zip"
           echo "Downloading Xray from: $download_url"
-          
+
           # Download and extract
           cd dist/linux
           archive_name="${download_url##*/}"
@@ -211,9 +203,9 @@ jobs:
           mkdir -p ./dist/installer/macos
           for arch in arm64 amd64; do
             if [ "$arch" = "arm64" ]; then
-              token="macos-arm64"
+              xray_asset="Xray-macos-arm64-v8a.zip"
             else
-              token="macos-64"
+              xray_asset="Xray-macos-64.zip"
             fi
 
             rm -rf ./dist/macos
@@ -221,12 +213,7 @@ jobs:
 
             CGO_ENABLED=1 GOOS=darwin GOARCH=$arch go build -trimpath -ldflags "-s -w" -o ./dist/macos/JhopanStoreVPN .
 
-            download_url=$(TARGET_TOKEN="$token" python3 -c "import json,os,urllib.request; data=json.load(urllib.request.urlopen('https://api.github.com/repos/XTLS/Xray-core/releases/latest')); urls=[a.get('browser_download_url','') for a in data.get('assets',[])]; urls=[u for u in urls if 'macos' in u and not u.endswith('.dgst') and (u.endswith('.zip') or u.endswith('.tar.gz') or u.endswith('.tgz'))]; t=os.environ.get('TARGET_TOKEN','macos-arm64'); pick=lambda n: next((u for u in urls if n in u), ''); chosen=pick(t) or (pick('macos-arm64') if t!='macos-arm64' else '') or (pick('macos-64') if t!='macos-64' else '') or (urls[0] if urls else ''); print(chosen)")
-
-            if [ -z "$download_url" ]; then
-              echo "Could not find Xray macOS binary in latest release for $arch"
-              exit 1
-            fi
+            download_url="https://github.com/XTLS/Xray-core/releases/latest/download/$xray_asset"
 
             archive_name="${download_url##*/}"
             curl -L "$download_url" -o "./dist/macos/$archive_name"
