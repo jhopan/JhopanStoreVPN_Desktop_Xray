@@ -53,6 +53,10 @@ jobs:
       - name: Copy Windows runtime files (wintun.dll)
         shell: pwsh
         run: |
+          if (Test-Path .\assets) {
+            New-Item -ItemType Directory -Force -Path .\dist\windows\assets | Out-Null
+            Copy-Item .\assets\* .\dist\windows\assets\ -Recurse -Force
+          }
           if (Test-Path .\wintun.dll) { Copy-Item .\wintun.dll .\dist\windows\ -Force }
           if (Test-Path .\dist\windows\JhopanStoreVPN.exe) { Write-Host "✓ JhopanStoreVPN.exe built successfully" }
           else { throw "Missing dist/windows/JhopanStoreVPN.exe" }
@@ -154,6 +158,11 @@ jobs:
             exit 1
           fi
 
+      - name: Copy Linux assets
+        run: |
+          mkdir -p ./dist/linux/assets
+          cp -R ./assets/. ./dist/linux/assets/
+
       - name: Build Linux package (.deb)
         run: |
           chmod +x ./packaging/linux/build-deb.sh
@@ -222,6 +231,11 @@ jobs:
             exit 1
           fi
 
+      - name: Copy macOS assets
+        run: |
+          mkdir -p ./dist/macos/assets
+          cp -R ./assets/. ./dist/macos/assets/
+
       - name: Build macOS package (DMG)
         run: |
           chmod +x ./packaging/macos/build-dmg.sh
@@ -253,13 +267,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release-artifacts/JhopanStoreVPN-windows/windows/JhopanStoreVPN.exe
-            release-artifacts/JhopanStoreVPN-windows/windows/xray.exe
-            release-artifacts/JhopanStoreVPN-windows/windows/wintun.dll
             release-artifacts/JhopanStoreVPN-windows/installer/windows/JhopanStoreVPN-Setup.exe
-            release-artifacts/JhopanStoreVPN-linux/linux/JhopanStoreVPN
-            release-artifacts/JhopanStoreVPN-linux/linux/xray
             release-artifacts/JhopanStoreVPN-linux/installer/linux/jhopanstorevpn_*.deb
-            release-artifacts/JhopanStoreVPN-macos/macos/JhopanStoreVPN
-            release-artifacts/JhopanStoreVPN-macos/macos/xray
             release-artifacts/JhopanStoreVPN-macos/installer/macos/JhopanStoreVPN-*.dmg
