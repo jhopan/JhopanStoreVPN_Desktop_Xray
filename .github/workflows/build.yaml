@@ -185,17 +185,7 @@ jobs:
             dist/installer/linux/*.rpm
 
   build-macos:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-13
-            arch: amd64
-            xray_arch_token: macos-64
-          - runner: macos-14
-            arch: arm64
-            xray_arch_token: macos-arm64
-    runs-on: ${{ matrix.runner }}
+    runs-on: macos-14
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -216,93 +206,88 @@ jobs:
       - name: Remove Windows-only resource object
         run: rm -f ./resource.syso
 
-      - name: Build macOS binary (native runner arch)
+      - name: Build macOS binaries (arm64 + amd64)
         run: |
-          mkdir -p ./dist/macos
-          CGO_ENABLED=1 GOOS=darwin GOARCH=${{ matrix.arch }} go build -trimpath -ldflags "-s -w" -o ./dist/macos/JhopanStoreVPN .
+          mkdir -p ./dist/installer/macos
+          for arch in arm64 amd64; do
+            if [ "$arch" = "arm64" ]; then
+              token="macos-arm64"
+            else
+              token="macos-64"
+            fi
 
-      - name: Download Xray for macOS
-        run: |
-          # Get latest Xray-core release URL in a format-agnostic way
-          TARGET_TOKEN="${{ matrix.xray_arch_token }}"
-          download_url=$(python3 - <<'PY'
-          import json
-          import os
-          import urllib.request
+            rm -rf ./dist/macos
+            mkdir -p ./dist/macos
 
-          api = "https://api.github.com/repos/XTLS/Xray-core/releases/latest"
-          with urllib.request.urlopen(api) as r:
-            data = json.load(r)
+            CGO_ENABLED=1 GOOS=darwin GOARCH=$arch go build -trimpath -ldflags "-s -w" -o ./dist/macos/JhopanStoreVPN .
 
-          target = os.environ.get("TARGET_TOKEN", "macos-arm64")
-          urls = [a.get("browser_download_url", "") for a in data.get("assets", [])]
-          urls = [u for u in urls if "macos" in u and not u.endswith(".dgst")]
+            TARGET_TOKEN="$token" download_url=$(python3 - <<'PY'
+import json
+import os
+import urllib.request
 
-          def pick(candidates, needle):
-            for u in candidates:
-              if needle in u and (u.endswith(".zip") or u.endswith(".tar.gz") or u.endswith(".tgz")):
-                return u
-            return ""
+api = "https://api.github.com/repos/XTLS/Xray-core/releases/latest"
+with urllib.request.urlopen(api) as r:
+    data = json.load(r)
 
-          chosen = pick(urls, target)
-          if not chosen and target != "macos-arm64":
-            chosen = pick(urls, "macos-arm64")
-          if not chosen and target != "macos-64":
-            chosen = pick(urls, "macos-64")
-          if not chosen and urls:
-            chosen = urls[0]
+target = os.environ.get("TARGET_TOKEN", "macos-arm64")
+urls = [a.get("browser_download_url", "") for a in data.get("assets", [])]
+urls = [u for u in urls if "macos" in u and not u.endswith(".dgst")]
 
-          print(chosen)
-          PY
-          )
-          if [ -z "$download_url" ]; then
-            echo "Could not find Xray macOS binary in latest release"
-            exit 1
-          fi
-          echo "Downloading Xray from: $download_url"
-          
-          # Download and extract
-          cd dist/macos
-          archive_name="${download_url##*/}"
-          curl -L "$download_url" -o "$archive_name"
-          case "$archive_name" in
-            *.zip)
-              unzip -o "$archive_name"
-              ;;
-            *.tar.gz|*.tgz)
-              tar -xzf "$archive_name"
-              ;;
-            *)
-              echo "Unsupported archive format: $archive_name"
+def pick(candidates, needle):
+    for u in candidates:
+        if needle in u and (u.endswith(".zip") or u.endswith(".tar.gz") or u.endswith(".tgz")):
+            return u
+    return ""
+
+chosen = pick(urls, target)
+if not chosen and target != "macos-arm64":
+    chosen = pick(urls, "macos-arm64")
+if not chosen and target != "macos-64":
+    chosen = pick(urls, "macos-64")
+if not chosen and urls:
+    chosen = urls[0]
+
+print(chosen)
+PY
+)
+
+            if [ -z "$download_url" ]; then
+              echo "Could not find Xray macOS binary in latest release for $arch"
               exit 1
-              ;;
-          esac
-          rm "$archive_name"
-          chmod +x xray
-          if [ -f xray ]; then
-            echo "✓ Xray downloaded successfully"
-          else
-            echo "xray not found after extraction"
-            exit 1
-          fi
+            fi
 
-      - name: Copy macOS assets
-        run: |
-          mkdir -p ./dist/macos/assets
-          cp -R ./assets/. ./dist/macos/assets/
+            archive_name="${download_url##*/}"
+            curl -L "$download_url" -o "./dist/macos/$archive_name"
+            cd ./dist/macos
+            case "$archive_name" in
+              *.zip)
+                unzip -o "$archive_name"
+                ;;
+              *.tar.gz|*.tgz)
+                tar -xzf "$archive_name"
+                ;;
+              *)
+                echo "Unsupported archive format: $archive_name"
+                exit 1
+                ;;
+            esac
+            rm "$archive_name"
+            chmod +x xray
+            cd ../../
 
-      - name: Build macOS package (DMG)
-        run: |
-          chmod +x ./packaging/macos/build-dmg.sh
-          ./packaging/macos/build-dmg.sh "$APP_VERSION" "${{ matrix.arch }}"
+            mkdir -p ./dist/macos/assets
+            cp -R ./assets/. ./dist/macos/assets/
+
+            chmod +x ./packaging/macos/build-dmg.sh
+            ./packaging/macos/build-dmg.sh "$APP_VERSION" "$arch"
+          done
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: JhopanStoreVPN-macos-${{ matrix.arch }}
+          name: JhopanStoreVPN-macos
           path: |
-            dist/macos/JhopanStoreVPN
-            dist/macos/xray
             dist/installer/macos/*.dmg
 
   release:
@@ -325,5 +310,5 @@ jobs:
             release-artifacts/JhopanStoreVPN-windows/installer/windows/JhopanStoreVPN-Setup.exe
             release-artifacts/JhopanStoreVPN-linux/installer/linux/jhopanstorevpn_*.deb
             release-artifacts/JhopanStoreVPN-linux/installer/linux/jhopanstorevpn_*.rpm
-            release-artifacts/JhopanStoreVPN-macos-amd64/installer/macos/JhopanStoreVPN-*-amd64.dmg
-            release-artifacts/JhopanStoreVPN-macos-arm64/installer/macos/JhopanStoreVPN-*-arm64.dmg
+            release-artifacts/JhopanStoreVPN-macos/installer/macos/JhopanStoreVPN-*-amd64.dmg
+            release-artifacts/JhopanStoreVPN-macos/installer/macos/JhopanStoreVPN-*-arm64.dmg
