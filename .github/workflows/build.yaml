@@ -221,36 +221,7 @@ jobs:
 
             CGO_ENABLED=1 GOOS=darwin GOARCH=$arch go build -trimpath -ldflags "-s -w" -o ./dist/macos/JhopanStoreVPN .
 
-            TARGET_TOKEN="$token" download_url=$(python3 - <<'PY'
-import json
-import os
-import urllib.request
-
-api = "https://api.github.com/repos/XTLS/Xray-core/releases/latest"
-with urllib.request.urlopen(api) as r:
-    data = json.load(r)
-
-target = os.environ.get("TARGET_TOKEN", "macos-arm64")
-urls = [a.get("browser_download_url", "") for a in data.get("assets", [])]
-urls = [u for u in urls if "macos" in u and not u.endswith(".dgst")]
-
-def pick(candidates, needle):
-    for u in candidates:
-        if needle in u and (u.endswith(".zip") or u.endswith(".tar.gz") or u.endswith(".tgz")):
-            return u
-    return ""
-
-chosen = pick(urls, target)
-if not chosen and target != "macos-arm64":
-    chosen = pick(urls, "macos-arm64")
-if not chosen and target != "macos-64":
-    chosen = pick(urls, "macos-64")
-if not chosen and urls:
-    chosen = urls[0]
-
-print(chosen)
-PY
-)
+            download_url=$(TARGET_TOKEN="$token" python3 -c "import json,os,urllib.request; data=json.load(urllib.request.urlopen('https://api.github.com/repos/XTLS/Xray-core/releases/latest')); urls=[a.get('browser_download_url','') for a in data.get('assets',[])]; urls=[u for u in urls if 'macos' in u and not u.endswith('.dgst') and (u.endswith('.zip') or u.endswith('.tar.gz') or u.endswith('.tgz'))]; t=os.environ.get('TARGET_TOKEN','macos-arm64'); pick=lambda n: next((u for u in urls if n in u), ''); chosen=pick(t) or (pick('macos-arm64') if t!='macos-arm64' else '') or (pick('macos-64') if t!='macos-64' else '') or (urls[0] if urls else ''); print(chosen)")
 
             if [ -z "$download_url" ]; then
               echo "Could not find Xray macOS binary in latest release for $arch"
