@@ -208,9 +208,9 @@ jobs:
         run: |
           # Get latest Xray-core release
           release=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest)
-          download_url=$(echo "$release" | grep -Eo '"browser_download_url": "[^"]*macos-arm64-v8a\.zip"' | head -1 | cut -d'"' -f4)
+          download_url=$(echo "$release" | grep -Eo '"browser_download_url": "[^"]*macos-arm64[^"]*(\.zip|\.tar\.gz)"' | head -1 | cut -d'"' -f4)
           if [ -z "$download_url" ]; then
-            download_url=$(echo "$release" | grep -Eo '"browser_download_url": "[^"]*macos-64\.zip"' | head -1 | cut -d'"' -f4)
+            download_url=$(echo "$release" | grep -Eo '"browser_download_url": "[^"]*macos[^"]*(\.zip|\.tar\.gz)"' | head -1 | cut -d'"' -f4)
           fi
           if [ -z "$download_url" ]; then
             echo "Could not find Xray macOS binary in latest release"
@@ -220,9 +220,21 @@ jobs:
           
           # Download and extract
           cd dist/macos
-          curl -L "$download_url" -o xray.zip
-          unzip -o xray.zip
-          rm xray.zip
+          archive_name="${download_url##*/}"
+          curl -L "$download_url" -o "$archive_name"
+          case "$archive_name" in
+            *.zip)
+              unzip -o "$archive_name"
+              ;;
+            *.tar.gz|*.tgz)
+              tar -xzf "$archive_name"
+              ;;
+            *)
+              echo "Unsupported archive format: $archive_name"
+              exit 1
+              ;;
+          esac
+          rm "$archive_name"
           chmod +x xray
           if [ -f xray ]; then
             echo "✓ Xray downloaded successfully"
