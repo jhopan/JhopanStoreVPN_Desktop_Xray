@@ -206,12 +206,31 @@ jobs:
 
       - name: Download Xray for macOS
         run: |
-          # Get latest Xray-core release
-          release=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest)
-          download_url=$(echo "$release" | grep -Eo '"browser_download_url": "[^"]*macos-arm64[^"]*(\.zip|\.tar\.gz)"' | head -1 | cut -d'"' -f4)
-          if [ -z "$download_url" ]; then
-            download_url=$(echo "$release" | grep -Eo '"browser_download_url": "[^"]*macos[^"]*(\.zip|\.tar\.gz)"' | head -1 | cut -d'"' -f4)
-          fi
+          # Get latest Xray-core release URL in a format-agnostic way
+          download_url=$(python3 - <<'PY'
+import json
+import urllib.request
+
+api = "https://api.github.com/repos/XTLS/Xray-core/releases/latest"
+with urllib.request.urlopen(api) as r:
+    data = json.load(r)
+
+urls = [a.get("browser_download_url", "") for a in data.get("assets", [])]
+urls = [u for u in urls if "macos" in u and not u.endswith(".dgst")]
+
+def pick(candidates, needle):
+    for u in candidates:
+        if needle in u and (u.endswith(".zip") or u.endswith(".tar.gz") or u.endswith(".tgz")):
+            return u
+    return ""
+
+chosen = pick(urls, "macos-arm64") or pick(urls, "macos-64")
+if not chosen and urls:
+    chosen = urls[0]
+
+print(chosen)
+PY
+)
           if [ -z "$download_url" ]; then
             echo "Could not find Xray macOS binary in latest release"
             exit 1
