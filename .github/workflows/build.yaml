@@ -261,6 +261,18 @@ jobs:
           path: |
             dist/installer/macos/*.dmg
 
+      - name: Verify macOS dual-arch DMGs exist
+        run: |
+          ls -la ./dist/installer/macos
+          if ! ls ./dist/installer/macos/*-arm64.dmg >/dev/null 2>&1; then
+            echo "Missing arm64 DMG"
+            exit 1
+          fi
+          if ! ls ./dist/installer/macos/*-amd64.dmg >/dev/null 2>&1; then
+            echo "Missing amd64 DMG"
+            exit 1
+          fi
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs:
@@ -274,12 +286,43 @@ jobs:
         with:
           path: release-artifacts
 
+      - name: Collect release installer files
+        run: |
+          mkdir -p release-files
+          find release-artifacts -type f \( \
+            -name "*Setup.exe" -o \
+            -name "*.deb" -o \
+            -name "*.rpm" -o \
+            -name "*.dmg" \
+          \) -print -exec cp {} release-files/ \;
+          echo "Collected files:"
+          ls -la release-files
+
+      - name: Verify required release files
+        run: |
+          if ! ls release-files/*Setup.exe >/dev/null 2>&1; then
+            echo "Missing Windows setup artifact"
+            exit 1
+          fi
+          if ! ls release-files/*.deb >/dev/null 2>&1; then
+            echo "Missing Linux DEB artifact"
+            exit 1
+          fi
+          if ! ls release-files/*.rpm >/dev/null 2>&1; then
+            echo "Missing Linux RPM artifact"
+            exit 1
+          fi
+          if ! ls release-files/*-arm64.dmg >/dev/null 2>&1; then
+            echo "Missing macOS arm64 DMG artifact"
+            exit 1
+          fi
+          if ! ls release-files/*-amd64.dmg >/dev/null 2>&1; then
+            echo "Missing macOS amd64 DMG artifact"
+            exit 1
+          fi
+
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release-artifacts/JhopanStoreVPN-windows/installer/windows/JhopanStoreVPN-Setup.exe
-            release-artifacts/JhopanStoreVPN-linux/installer/linux/jhopanstorevpn_*.deb
-            release-artifacts/JhopanStoreVPN-linux/installer/linux/jhopanstorevpn_*.rpm
-            release-artifacts/JhopanStoreVPN-macos/installer/macos/JhopanStoreVPN-*-amd64.dmg
-            release-artifacts/JhopanStoreVPN-macos/installer/macos/JhopanStoreVPN-*-arm64.dmg
+            release-files/*
